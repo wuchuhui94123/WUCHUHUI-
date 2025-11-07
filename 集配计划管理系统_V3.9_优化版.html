@@ -1252,9 +1252,30 @@
                         <div class="upload-area" onclick="document.getElementById('file-factory-batch').click()">
                             <div class="upload-icon">📊</div>
                             <div class="upload-text">拖拽或点击上传 <strong>厂家更新表.xlsx</strong></div>
-                            <div class="upload-hint">表格需包含：外协厂家、主厂家、区域（可选）</div>
-                            <input type="file" id="file-factory-batch" accept=".xlsx,.xls" style="display:none" onchange="handleBatchUpdate(this)">
+                            <div class="upload-hint">✅ 支持多文件 | 支持大文件 | 自动更新</div>
+                            <input type="file" id="file-factory-batch" accept=".xlsx,.xls" multiple style="display:none" onchange="handleBatchUpdate(this)">
                         </div>
+
+                        <!-- 大文件进度条 -->
+                        <div id="factory-update-progress" class="progress-container">
+                            <div class="progress-header">
+                                <div class="progress-title">
+                                    <span class="progress-spinner"></span>
+                                    <span id="factory-update-title">正在处理...</span>
+                                </div>
+                                <div class="progress-percentage" id="factory-update-percentage">0%</div>
+                            </div>
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar-fill" id="factory-update-bar" style="width: 0%"></div>
+                            </div>
+                            <div class="progress-status" id="factory-update-status">准备中...</div>
+                            <div class="progress-details">
+                                <div><span>已处理:</span> <span id="factory-update-processed">0</span>/<span id="factory-update-total">0</span> 条</div>
+                                <div><span>耗时:</span> <span id="factory-update-time">0</span> 秒</div>
+                                <div><span>速度:</span> <span id="factory-update-speed">0</span> 条/秒</div>
+                            </div>
+                        </div>
+
                         <div id="batch-update-result" style="margin-top: 20px;"></div>
                     </div>
                     
@@ -1279,6 +1300,26 @@
                     <div class="upload-hint">支持 .xlsx, .xlsm 格式</div>
                     <input type="file" id="file-ship-status" accept=".xlsx,.xlsm" style="display:none" onchange="handleFileUpload(this, 'shipstatus')">
                 </div>
+
+                <!-- 进度条 -->
+                <div id="progress-ship" class="progress-container">
+                    <div class="progress-header">
+                        <div class="progress-title">
+                            <span class="progress-spinner"></span>
+                            <span id="progress-ship-title">正在处理...</span>
+                        </div>
+                        <div class="progress-percentage" id="progress-ship-percentage">0%</div>
+                    </div>
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar-fill" id="progress-ship-bar" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-status" id="progress-ship-status">准备中...</div>
+                    <div class="progress-details">
+                        <div><span>已处理:</span> <span id="progress-ship-processed">0</span>/<span id="progress-ship-total">0</span> 条</div>
+                        <div><span>耗时:</span> <span id="progress-ship-time">0</span> 秒</div>
+                    </div>
+                </div>
+
                 <div class="form-group" style="max-width: 300px;">
                     <label class="form-label">选择船号</label>
                     <select class="form-control" id="select-ship" onchange="showShipStatus()">
@@ -1873,8 +1914,14 @@
         async function handleFileUpload(input, type) {
             const file = input.files[0];
             if (!file) return;
-            
-            const progressBar = new ProgressBar('progress-upload');
+
+            // 根据类型选择进度条
+            let progressBarId = 'progress-upload';
+            if (type === 'shipstatus') {
+                progressBarId = 'progress-ship';
+            }
+
+            const progressBar = new ProgressBar(progressBarId);
             progressBar.show();
             progressBar.setTitle(`正在读取文件: ${file.name}`);
             progressBar.update(0, 100, '准备读取文件...');
@@ -4918,101 +4965,155 @@
         
         // 批量更新
         async function handleBatchUpdate(input) {
-            const file = input.files[0];
-            if (!file) return;
-            
-            const resultDiv = document.getElementById('batch-update-result');
-            resultDiv.innerHTML = '<p style="color: #666;">正在处理...</p>';
-            
-            try {
-                const reader = new FileReader();
-                
-                reader.onload = async function(e) {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-                        
-                        let totalUpdated = 0;
-                        const updateSummary = [];
-                        
-                        jsonData.forEach(row => {
-                            const factory = row['外协厂家'] || row['厂家'] || row['Factory'] || '';
-                            const mainFactory = row['主厂家'] || row['MainFactory'] || '';
-                            const region = row['区域'] || row['Region'] || '';
-                            
-                            if (!factory || !mainFactory) return;
-                            
-                            let count = 0;
-                            appData.planData.forEach(item => {
-                                const itemFactory = item['厂家'] || item['Factory'] || '';
-                                
-                                if (itemFactory === factory) {
-                                    item['主厂家'] = mainFactory;
-                                    item['MainFactory'] = mainFactory;
-                                    
-                                    if (region) {
-                                        item['区域'] = region;
-                                        item['Region'] = region;
-                                    }
-                                    
-                                    count++;
+            const files = input.files;
+            if (!files || files.length === 0) return;
+
+            const progress = document.getElementById('factory-update-progress');
+            const result = document.getElementById('batch-update-result');
+            const title = document.getElementById('factory-update-title');
+            const percentage = document.getElementById('factory-update-percentage');
+            const bar = document.getElementById('factory-update-bar');
+            const status = document.getElementById('factory-update-status');
+            const processed = document.getElementById('factory-update-processed');
+            const total = document.getElementById('factory-update-total');
+            const timeSpan = document.getElementById('factory-update-time');
+            const speedSpan = document.getElementById('factory-update-speed');
+
+            progress.classList.add('show');
+            result.innerHTML = '';
+
+            let totalUpdated = 0;
+            let totalRecords = 0;
+            const updateSummary = [];
+            const startTime = Date.now();
+
+            for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+                const file = files[fileIndex];
+                title.textContent = `处理文件 ${fileIndex + 1}/${files.length}: ${file.name}`;
+
+                try {
+                    const reader = new FileReader();
+                    await new Promise((resolve, reject) => {
+                        reader.onload = async function(e) {
+                            try {
+                                status.textContent = '解析Excel...';
+                                const data = new Uint8Array(e.target.result);
+                                const workbook = XLSX.read(data, { type: 'array' });
+                                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+                                totalRecords += jsonData.length;
+                                total.textContent = totalRecords;
+
+                                const batchSize = 500;
+                                let fileUpdated = 0;
+
+                                for (let i = 0; i < jsonData.length; i += batchSize) {
+                                    const batch = jsonData.slice(i, Math.min(i + batchSize, jsonData.length));
+
+                                    batch.forEach(row => {
+                                        const factory = row['外协厂家'] || row['厂家'] || row['Factory'] || '';
+                                        const mainFactory = row['主厂家'] || row['MainFactory'] || '';
+                                        const region = row['区域'] || row['Region'] || '';
+
+                                        if (!factory || !mainFactory) return;
+
+                                        let count = 0;
+                                        appData.planData.forEach(item => {
+                                            const itemFactory = item['厂家'] || item['Factory'] || '';
+
+                                            if (itemFactory === factory) {
+                                                item['主厂家'] = mainFactory;
+                                                item['MainFactory'] = mainFactory;
+
+                                                if (region) {
+                                                    item['区域'] = region;
+                                                    item['Region'] = region;
+                                                }
+
+                                                count++;
+                                            }
+                                        });
+
+                                        if (count > 0) {
+                                            fileUpdated += count;
+
+                                            // 检查是否已存在相同厂家
+                                            const existingIndex = updateSummary.findIndex(s => s.factory === factory);
+                                            if (existingIndex >= 0) {
+                                                updateSummary[existingIndex].count += count;
+                                            } else {
+                                                updateSummary.push({
+                                                    factory: factory,
+                                                    mainFactory: mainFactory,
+                                                    count: count
+                                                });
+                                            }
+                                        }
+                                    });
+
+                                    const currentProcessed = i + batch.length;
+                                    processed.textContent = totalUpdated + currentProcessed;
+
+                                    const fileProgress = (currentProcessed / jsonData.length) * 100;
+                                    const overallProgress = ((fileIndex + fileProgress / 100) / files.length) * 100;
+
+                                    percentage.textContent = Math.round(overallProgress) + '%';
+                                    bar.style.width = overallProgress + '%';
+
+                                    const elapsed = (Date.now() - startTime) / 1000;
+                                    timeSpan.textContent = Math.floor(elapsed);
+                                    const speed = Math.round((totalUpdated + currentProcessed) / elapsed);
+                                    speedSpan.textContent = speed;
+
+                                    status.textContent = `处理中... ${currentProcessed}/${jsonData.length} 条`;
+
+                                    await new Promise(r => setTimeout(r, 0));
                                 }
-                            });
-                            
-                            if (count > 0) {
-                                totalUpdated += count;
-                                updateSummary.push({
-                                    factory: factory,
-                                    mainFactory: mainFactory,
-                                    count: count
-                                });
+
+                                totalUpdated += fileUpdated;
+                                resolve();
+                            } catch (error) {
+                                reject(error);
                             }
-                        });
-                        
-                        if (totalUpdated > 0) {
-                            saveLocalData();
-                            
-                            // 记录到历史
-                            updateSummary.forEach(item => {
-                                addUpdateHistory({
-                                    type: '批量更新',
-                                    factory: item.factory,
-                                    mainFactory: item.mainFactory,
-                                    count: item.count,
-                                    time: new Date().toLocaleString()
-                                });
-                            });
-                            
-                            resultDiv.innerHTML = `
-                                <div style="padding: 15px; background: #e8f5e9; border-radius: 6px; border-left: 4px solid #4caf50;">
-                                    <h5 style="margin: 0 0 10px 0; color: #2e7d32;">✅ 批量更新成功</h5>
-                                    <p style="margin: 5px 0;">更新了 ${updateSummary.length} 个厂家</p>
-                                    <p style="margin: 5px 0;">总计 ${totalUpdated} 条记录</p>
-                                </div>
-                            `;
-                            
-                            showToast(`成功更新 ${totalUpdated} 条记录`, 'success');
-                        } else {
-                            resultDiv.innerHTML = '<p style="color: #f44336;">未找到可更新的记录</p>';
-                        }
-                        
-                        // 重置文件输入
-                        input.value = '';
-                        
-                    } catch (error) {
-                        console.error('批量更新错误:', error);
-                        resultDiv.innerHTML = '<p style="color: #f44336;">文件解析失败</p>';
-                    }
-                };
-                
-                reader.readAsArrayBuffer(file);
-                
-            } catch (error) {
-                console.error('批量更新错误:', error);
-                resultDiv.innerHTML = '<p style="color: #f44336;">处理失败</p>';
+                        };
+                        reader.onerror = reject;
+                        reader.readAsArrayBuffer(file);
+                    });
+                } catch (error) {
+                    showToast(`文件 ${file.name} 处理失败`, 'error');
+                }
             }
+
+            status.textContent = '保存到硬盘...';
+            if (totalUpdated > 0) {
+                await saveLocalData();
+
+                // 记录到历史
+                updateSummary.forEach(item => {
+                    addUpdateHistory({
+                        type: '批量更新',
+                        factory: item.factory,
+                        mainFactory: item.mainFactory,
+                        count: item.count,
+                        time: new Date().toLocaleString()
+                    });
+                });
+            }
+
+            result.innerHTML = `
+                <div style="background: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
+                    <h4 style="color: #155724; margin: 0 0 10px 0;">✅ 批量更新完成</h4>
+                    <p style="color: #155724; margin: 5px 0;">• 处理文件：<strong>${files.length}</strong> 个</p>
+                    <p style="color: #155724; margin: 5px 0;">• 更新厂家：<strong>${updateSummary.length}</strong> 个</p>
+                    <p style="color: #155724; margin: 5px 0;">• 更新记录：<strong>${totalUpdated}</strong> 条</p>
+                    <p style="color: #155724; margin: 5px 0;">• 处理耗时：<strong>${Math.floor((Date.now() - startTime) / 1000)}</strong> 秒</p>
+                </div>
+            `;
+
+            showToast('厂家批量更新成功！', 'success');
+            input.value = '';
+            setTimeout(() => progress.classList.remove('show'), 2000);
         }
         
         // 添加更新历史记录
