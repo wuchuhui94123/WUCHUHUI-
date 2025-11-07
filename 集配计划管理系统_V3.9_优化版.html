@@ -1115,33 +1115,56 @@
                 <div id="data-sub-query" class="data-sub-module" style="display: none;">
                     <h3 style="color: #667eea; margin-bottom: 15px;">🔍 数据查询</h3>
                     
-                    <!-- 通用查询框 -->
+                    <!-- 五个独立筛选框 -->
                     <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                         <div class="filter-group">
-                            <div class="filter-item" style="flex: 2;">
-                                <label class="form-label">🔍 关键词搜索（支持船号/分段/托盘号/厂家/来源）</label>
-                                <input type="text" class="form-control" id="unified-search-keyword" 
-                                       placeholder="输入关键词，支持大小写模糊查找" 
+                            <div class="filter-item">
+                                <label class="form-label">🚢 船号</label>
+                                <input type="text" class="form-control" id="query-ship"
+                                       placeholder="输入船号"
                                        onkeyup="if(event.keyCode==13) unifiedSearch()">
                             </div>
-                            <div class="filter-item" style="display: flex; align-items: flex-end;">
-                                <button class="btn btn-primary" onclick="unifiedSearch()" style="padding: 10px 30px;">
-                                    🔍 查询
-                                </button>
+                            <div class="filter-item">
+                                <label class="form-label">📦 分段号</label>
+                                <input type="text" class="form-control" id="query-block"
+                                       placeholder="输入分段号"
+                                       onkeyup="if(event.keyCode==13) unifiedSearch()">
                             </div>
-                            <div class="filter-item" style="display: flex; align-items: flex-end;">
-                                <button class="btn btn-secondary" onclick="clearUnifiedSearch()">
-                                    🔄 清空
-                                </button>
+                            <div class="filter-item">
+                                <label class="form-label">🏷️ 托盘号</label>
+                                <input type="text" class="form-control" id="query-pallet"
+                                       placeholder="输入托盘号"
+                                       onkeyup="if(event.keyCode==13) unifiedSearch()">
+                            </div>
+                            <div class="filter-item">
+                                <label class="form-label">🆔 ID号</label>
+                                <input type="text" class="form-control" id="query-id"
+                                       placeholder="输入ID号"
+                                       onkeyup="if(event.keyCode==13) unifiedSearch()">
+                            </div>
+                            <div class="filter-item">
+                                <label class="form-label">🏭 承接二级</label>
+                                <input type="text" class="form-control" id="query-contractor"
+                                       placeholder="输入承接二级"
+                                       onkeyup="if(event.keyCode==13) unifiedSearch()">
                             </div>
                         </div>
-                        
+
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button class="btn btn-primary" onclick="unifiedSearch()" style="padding: 10px 30px;">
+                                🔍 查询
+                            </button>
+                            <button class="btn btn-secondary" onclick="clearUnifiedSearch()">
+                                🔄 清空
+                            </button>
+                        </div>
+
                         <div style="margin-top: 15px; padding: 10px; background: #e8f4f8; border-radius: 5px; border-left: 4px solid #667eea;">
                             <strong>💡 查询提示：</strong>
                             <ul style="margin: 5px 0; padding-left: 20px; font-size: 14px;">
-                                <li>支持大小写模糊查找（如：h1234 可匹配 H1234）</li>
+                                <li>支持模糊查询，可输入部分内容进行匹配</li>
+                                <li>多个条件同时使用为"与"关系（同时满足）</li>
                                 <li>自动同时查询托盘明细和厂家匹配数据</li>
-                                <li>结果分两个表格展示，无结果时表格不显示</li>
                             </ul>
                         </div>
                     </div>
@@ -5083,38 +5106,67 @@
         
         // ==================== 统一查询功能 ====================
         function unifiedSearch() {
-            const keyword = document.getElementById('unified-search-keyword').value.trim();
-            
-            if (!keyword) {
-                showToast('请输入查询关键词', 'warning');
+            // 获取5个筛选条件
+            const ship = document.getElementById('query-ship').value.trim().toLowerCase();
+            const block = document.getElementById('query-block').value.trim().toLowerCase();
+            const pallet = document.getElementById('query-pallet').value.trim().toLowerCase();
+            const id = document.getElementById('query-id').value.trim().toLowerCase();
+            const contractor = document.getElementById('query-contractor').value.trim().toLowerCase();
+
+            // 至少需要一个查询条件
+            if (!ship && !block && !pallet && !id && !contractor) {
+                showToast('请至少输入一个查询条件', 'warning');
                 return;
             }
-            
-            // 转换为小写用于模糊查找
-            const lowerKeyword = keyword.toLowerCase();
-            
+
             // 查询托盘明细
             const tuopanResults = appData.tuopanData.filter(item => {
-                return Object.values(item).some(value => {
-                    if (value && typeof value === 'string') {
-                        return value.toLowerCase().includes(lowerKeyword);
-                    }
-                    return false;
-                });
+                // 船号匹配（支持：船号、工程号）
+                const itemShip = (item['船号'] || item['工程号'] || '').toLowerCase();
+                const shipMatch = !ship || itemShip.includes(ship);
+
+                // 分段号匹配（支持：分段、分段号）
+                const itemBlock = (item['分段'] || item['分段号'] || '').toLowerCase();
+                const blockMatch = !block || itemBlock.includes(block);
+
+                // 托盘号匹配（支持：托盘号、托盘）
+                const itemPallet = (item['托盘号'] || item['托盘'] || '').toLowerCase();
+                const palletMatch = !pallet || itemPallet.includes(pallet);
+
+                // ID号匹配（支持：ID、id、ID号）
+                const itemId = (item['ID'] || item['id'] || item['ID号'] || '').toLowerCase();
+                const idMatch = !id || itemId.includes(id);
+
+                // 承接二级匹配（支持：承接二级、二级承包、承接单位）
+                const itemContractor = (item['承接二级'] || item['二级承包'] || item['承接单位'] || '').toLowerCase();
+                const contractorMatch = !contractor || itemContractor.includes(contractor);
+
+                // 所有条件都满足才返回（与关系）
+                return shipMatch && blockMatch && palletMatch && idMatch && contractorMatch;
             });
-            
+
             // 查询厂家数据
             const factoryResults = appData.factoryData.filter(item => {
-                return Object.values(item).some(value => {
-                    if (value && typeof value === 'string') {
-                        return value.toLowerCase().includes(lowerKeyword);
-                    }
-                    return false;
-                });
+                const itemShip = (item['船号'] || item['工程号'] || '').toLowerCase();
+                const shipMatch = !ship || itemShip.includes(ship);
+
+                const itemBlock = (item['分段'] || item['分段号'] || '').toLowerCase();
+                const blockMatch = !block || itemBlock.includes(block);
+
+                const itemPallet = (item['托盘号'] || item['托盘'] || '').toLowerCase();
+                const palletMatch = !pallet || itemPallet.includes(pallet);
+
+                const itemId = (item['ID'] || item['id'] || item['ID号'] || '').toLowerCase();
+                const idMatch = !id || itemId.includes(id);
+
+                const itemContractor = (item['承接二级'] || item['二级承包'] || item['承接单位'] || '').toLowerCase();
+                const contractorMatch = !contractor || itemContractor.includes(contractor);
+
+                return shipMatch && blockMatch && palletMatch && idMatch && contractorMatch;
             });
-            
+
             // 显示结果
-            displayUnifiedResults(tuopanResults, factoryResults, keyword);
+            displayUnifiedResults(tuopanResults, factoryResults, '');
         }
         
         function displayUnifiedResults(tuopanResults, factoryResults, keyword) {
@@ -5195,33 +5247,65 @@
         }
         
         function clearUnifiedSearch() {
-            document.getElementById('unified-search-keyword').value = '';
+            // 清空5个筛选框
+            document.getElementById('query-ship').value = '';
+            document.getElementById('query-block').value = '';
+            document.getElementById('query-pallet').value = '';
+            document.getElementById('query-id').value = '';
+            document.getElementById('query-contractor').value = '';
+
+            // 隐藏查询结果
             document.getElementById('tuopan-query-result').style.display = 'none';
             document.getElementById('factory-query-result').style.display = 'none';
             document.getElementById('no-query-result').style.display = 'none';
         }
         
         function exportQueryResult(type) {
+            // 获取5个筛选条件
+            const ship = document.getElementById('query-ship').value.trim().toLowerCase();
+            const block = document.getElementById('query-block').value.trim().toLowerCase();
+            const pallet = document.getElementById('query-pallet').value.trim().toLowerCase();
+            const id = document.getElementById('query-id').value.trim().toLowerCase();
+            const contractor = document.getElementById('query-contractor').value.trim().toLowerCase();
+
             if (type === 'tuopan') {
-                const keyword = document.getElementById('unified-search-keyword').value.trim().toLowerCase();
                 const results = appData.tuopanData.filter(item => {
-                    return Object.values(item).some(value => {
-                        if (value && typeof value === 'string') {
-                            return value.toLowerCase().includes(keyword);
-                        }
-                        return false;
-                    });
+                    const itemShip = (item['船号'] || item['工程号'] || '').toLowerCase();
+                    const shipMatch = !ship || itemShip.includes(ship);
+
+                    const itemBlock = (item['分段'] || item['分段号'] || '').toLowerCase();
+                    const blockMatch = !block || itemBlock.includes(block);
+
+                    const itemPallet = (item['托盘号'] || item['托盘'] || '').toLowerCase();
+                    const palletMatch = !pallet || itemPallet.includes(pallet);
+
+                    const itemId = (item['ID'] || item['id'] || item['ID号'] || '').toLowerCase();
+                    const idMatch = !id || itemId.includes(id);
+
+                    const itemContractor = (item['承接二级'] || item['二级承包'] || item['承接单位'] || '').toLowerCase();
+                    const contractorMatch = !contractor || itemContractor.includes(contractor);
+
+                    return shipMatch && blockMatch && palletMatch && idMatch && contractorMatch;
                 });
                 exportDataToExcel(results, `托盘查询结果_${new Date().toISOString().slice(0,10)}`);
             } else if (type === 'factory') {
-                const keyword = document.getElementById('unified-search-keyword').value.trim().toLowerCase();
                 const results = appData.factoryData.filter(item => {
-                    return Object.values(item).some(value => {
-                        if (value && typeof value === 'string') {
-                            return value.toLowerCase().includes(keyword);
-                        }
-                        return false;
-                    });
+                    const itemShip = (item['船号'] || item['工程号'] || '').toLowerCase();
+                    const shipMatch = !ship || itemShip.includes(ship);
+
+                    const itemBlock = (item['分段'] || item['分段号'] || '').toLowerCase();
+                    const blockMatch = !block || itemBlock.includes(block);
+
+                    const itemPallet = (item['托盘号'] || item['托盘'] || '').toLowerCase();
+                    const palletMatch = !pallet || itemPallet.includes(pallet);
+
+                    const itemId = (item['ID'] || item['id'] || item['ID号'] || '').toLowerCase();
+                    const idMatch = !id || itemId.includes(id);
+
+                    const itemContractor = (item['承接二级'] || item['二级承包'] || item['承接单位'] || '').toLowerCase();
+                    const contractorMatch = !contractor || itemContractor.includes(contractor);
+
+                    return shipMatch && blockMatch && palletMatch && idMatch && contractorMatch;
                 });
                 exportDataToExcel(results, `厂家查询结果_${new Date().toISOString().slice(0,10)}`);
             }
