@@ -5210,13 +5210,31 @@
         
         function renderQueryTable(tablePrefix, data) {
             if (data.length === 0) return;
-            
+
             const thead = document.getElementById(`${tablePrefix}-thead`);
             const tbody = document.getElementById(`${tablePrefix}-tbody`);
-            
+
             // 获取所有字段
-            const fields = Object.keys(data[0]).filter(key => !key.startsWith('_'));
-            
+            let fields = Object.keys(data[0]).filter(key => !key.startsWith('_'));
+
+            // 如果是厂家查询表格，在ID号右侧插入"图纸内容"列
+            if (tablePrefix === 'factory-query') {
+                // 查找ID号字段的位置
+                let idIndex = fields.findIndex(f =>
+                    f === 'ID' || f === 'id' || f === 'ID号' || f === 'Id'
+                );
+
+                // 如果没找到，尝试查找包含"id"的字段
+                if (idIndex === -1) {
+                    idIndex = fields.findIndex(f => f.toLowerCase().includes('id'));
+                }
+
+                // 如果找到ID号字段，且"图纸内容"列不存在，则插入
+                if (idIndex !== -1 && !fields.includes('图纸内容')) {
+                    fields.splice(idIndex + 1, 0, '图纸内容');
+                }
+            }
+
             // 生成表头
             let headerHtml = '<tr>';
             fields.forEach(field => {
@@ -5224,7 +5242,7 @@
             });
             headerHtml += '</tr>';
             thead.innerHTML = headerHtml;
-            
+
             // 生成表体（最多显示100条）
             let bodyHtml = '';
             const displayData = data.slice(0, 100);
@@ -5232,6 +5250,12 @@
                 bodyHtml += `<tr>`;
                 fields.forEach(field => {
                     let value = item[field] || '';
+
+                    // 如果是图纸内容列，智能获取值
+                    if (field === '图纸内容' && !value) {
+                        value = item['图纸内容'] || item['图纸'] || item['内容'] || item['图纸名称'] || '';
+                    }
+
                     if (typeof value === 'number') {
                         value = value.toFixed(2);
                     }
@@ -5240,7 +5264,7 @@
                 bodyHtml += '</tr>';
             });
             tbody.innerHTML = bodyHtml;
-            
+
             if (data.length > 100) {
                 tbody.innerHTML += `<tr><td colspan="${fields.length}" style="text-align: center; color: #999;">仅显示前100条，请导出查看完整数据</td></tr>`;
             }
@@ -5307,7 +5331,33 @@
 
                     return shipMatch && blockMatch && palletMatch && idMatch && contractorMatch;
                 });
-                exportDataToExcel(results, `厂家查询结果_${new Date().toISOString().slice(0,10)}`);
+
+                // 为厂家数据添加"图纸内容"列（在ID号之后）
+                const resultsWithDrawing = results.map(item => {
+                    const newItem = {};
+                    const keys = Object.keys(item);
+
+                    // 找到ID号字段
+                    let idIndex = keys.findIndex(k => k === 'ID' || k === 'id' || k === 'ID号' || k === 'Id');
+                    if (idIndex === -1) {
+                        idIndex = keys.findIndex(k => k.toLowerCase().includes('id'));
+                    }
+
+                    // 构建新对象，在ID号后插入图纸内容
+                    keys.forEach((key, index) => {
+                        newItem[key] = item[key];
+
+                        // 在ID号字段后插入图纸内容
+                        if (index === idIndex) {
+                            const drawingContent = item['图纸内容'] || item['图纸'] || item['内容'] || item['图纸名称'] || '';
+                            newItem['图纸内容'] = drawingContent;
+                        }
+                    });
+
+                    return newItem;
+                });
+
+                exportDataToExcel(resultsWithDrawing, `厂家查询结果_${new Date().toISOString().slice(0,10)}`);
             }
         }
         
