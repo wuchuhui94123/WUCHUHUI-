@@ -1292,7 +1292,30 @@
                 <div class="breadcrumb">📍 当前位置: 首页 > 月度计划看板</div>
                 <h2>月度计划看板</h2>
                 <p style="color: #666; margin: 10px 0 20px;">三月滚动计划的月度统计分析</p>
-                <button class="btn btn-primary" onclick="refreshMonthlyDashboard()" style="margin-bottom: 20px;">🔄 刷新数据</button>
+
+                <!-- 日期筛选框 -->
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="filter-item" style="min-width: 200px;">
+                            <label class="form-label">📅 开始日期</label>
+                            <input type="date" class="form-control" id="monthly-start-date">
+                        </div>
+                        <div class="filter-item" style="min-width: 200px;">
+                            <label class="form-label">📅 结束日期</label>
+                            <input type="date" class="form-control" id="monthly-end-date">
+                        </div>
+                        <div class="filter-item">
+                            <button class="btn btn-primary" onclick="refreshMonthlyDashboard()">🔍 筛选</button>
+                        </div>
+                        <div class="filter-item">
+                            <button class="btn btn-secondary" onclick="clearMonthlyDateFilter()">🔄 清空</button>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 13px; color: #666;">
+                        💡 提示：不选择日期将显示全部数据
+                    </div>
+                </div>
+
                 <h3 style="margin: 20px 0 15px;">三月总览</h3>
                 <div class="stats-grid" id="monthly-overview"></div>
                 <h3 style="margin: 30px 0 15px;">仓库分布</h3>
@@ -1316,7 +1339,30 @@
                 <div class="breadcrumb">📍 当前位置: 首页 > 双周配送看板</div>
                 <h2>双周配送看板</h2>
                 <p style="color: #666; margin: 10px 0 20px;">当周和下周的配送需求统计</p>
-                <button class="btn btn-primary" onclick="refreshBiweeklyDashboard()" style="margin-bottom: 20px;">🔄 刷新数据</button>
+
+                <!-- 日期筛选框 -->
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap;">
+                        <div class="filter-item" style="min-width: 200px;">
+                            <label class="form-label">📅 开始日期</label>
+                            <input type="date" class="form-control" id="biweekly-start-date">
+                        </div>
+                        <div class="filter-item" style="min-width: 200px;">
+                            <label class="form-label">📅 结束日期</label>
+                            <input type="date" class="form-control" id="biweekly-end-date">
+                        </div>
+                        <div class="filter-item">
+                            <button class="btn btn-primary" onclick="refreshBiweeklyDashboard()">🔍 筛选</button>
+                        </div>
+                        <div class="filter-item">
+                            <button class="btn btn-secondary" onclick="clearBiweeklyDateFilter()">🔄 清空</button>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 13px; color: #666;">
+                        💡 提示：不选择日期将显示全部数据
+                    </div>
+                </div>
+
                 <h3 style="margin: 20px 0 15px;">当周需求</h3>
                 <div class="stats-grid" id="current-week-stats"></div>
                 <h3 style="margin: 30px 0 15px;">下周需求</h3>
@@ -3419,9 +3465,29 @@
         }
         
         function calculateMonthlyStats() {
+            // 获取日期筛选条件
+            const startDate = document.getElementById('monthly-start-date').value;
+            const endDate = document.getElementById('monthly-end-date').value;
+
+            // 根据日期筛选数据
+            let filteredData = appData.planData;
+            if (startDate || endDate) {
+                filteredData = appData.planData.filter(item => {
+                    const itemDate = item['交货期'] || item['分交时间'] || item['到货日期'] || '';
+                    if (!itemDate) return true; // 如果没有日期字段，保留数据
+
+                    const dateStr = String(itemDate).split(' ')[0]; // 取日期部分
+
+                    if (startDate && dateStr < startDate) return false;
+                    if (endDate && dateStr > endDate) return false;
+
+                    return true;
+                });
+            }
+
             const stats = {
                 totalWeight: 0,
-                totalCount: appData.planData.length,
+                totalCount: filteredData.length,
                 arrivedWeight: 0,
                 arrivedCount: 0,
                 unarrivedWeight: 0,
@@ -3430,8 +3496,8 @@
                 monthlyStats: {},
                 weeklyStats: {}
             };
-            
-            appData.planData.forEach(item => {
+
+            filteredData.forEach(item => {
                 const weight = parseFloat(item['托盘重量']) || 0;
                 const arrivedWeight = parseFloat(item['到货重量']) || 0;
                 const status = parseFloat((item['到货状态'] || '0').replace('%', ''));
@@ -3653,9 +3719,29 @@
         }
         
         function calculateCurrentWeekStats() {
+            // 获取日期筛选条件
+            const startDate = document.getElementById('biweekly-start-date').value;
+            const endDate = document.getElementById('biweekly-end-date').value;
+
+            // 根据日期筛选数据
+            let filteredData = appData.planData;
+            if (startDate || endDate) {
+                filteredData = appData.planData.filter(item => {
+                    const itemDate = item['交货期'] || item['分交时间'] || item['到货日期'] || '';
+                    if (!itemDate) return true;
+
+                    const dateStr = String(itemDate).split(' ')[0];
+
+                    if (startDate && dateStr < startDate) return false;
+                    if (endDate && dateStr > endDate) return false;
+
+                    return true;
+                });
+            }
+
             const stats = { count: 0, weight: 0, unarrivedCount: 0, unarrivedWeight: 0 };
-            
-            appData.planData.forEach(item => {
+
+            filteredData.forEach(item => {
                 if (item['需求第一周']) {
                     stats.count++;
                     const weight = parseFloat(item['托盘重量']) || 0;
@@ -3674,9 +3760,29 @@
         }
         
         function calculateNextWeekStats() {
+            // 获取日期筛选条件
+            const startDate = document.getElementById('biweekly-start-date').value;
+            const endDate = document.getElementById('biweekly-end-date').value;
+
+            // 根据日期筛选数据
+            let filteredData = appData.planData;
+            if (startDate || endDate) {
+                filteredData = appData.planData.filter(item => {
+                    const itemDate = item['交货期'] || item['分交时间'] || item['到货日期'] || '';
+                    if (!itemDate) return true;
+
+                    const dateStr = String(itemDate).split(' ')[0];
+
+                    if (startDate && dateStr < startDate) return false;
+                    if (endDate && dateStr > endDate) return false;
+
+                    return true;
+                });
+            }
+
             const stats = { count: 0, weight: 0 };
-            
-            appData.planData.forEach(item => {
+
+            filteredData.forEach(item => {
                 if (item['需求第二周']) {
                     stats.count++;
                     stats.weight += parseFloat(item['托盘重量']) || 0;
@@ -3722,7 +3828,22 @@
             
             showModal('当周未到货明细', html);
         }
-        
+
+        // ==================== 日期筛选清空函数 ====================
+        function clearMonthlyDateFilter() {
+            document.getElementById('monthly-start-date').value = '';
+            document.getElementById('monthly-end-date').value = '';
+            refreshMonthlyDashboard();
+            showToast('已清空月度看板日期筛选', 'info');
+        }
+
+        function clearBiweeklyDateFilter() {
+            document.getElementById('biweekly-start-date').value = '';
+            document.getElementById('biweekly-end-date').value = '';
+            refreshBiweeklyDashboard();
+            showToast('已清空双周看板日期筛选', 'info');
+        }
+
         function refreshWarnings() {
             if (appData.planData.length === 0) {
                 showToast('暂无计划数据', 'warning');
