@@ -1083,15 +1083,23 @@
                         <input type="file" id="file-tuopan-update" accept=".xlsx,.xls" multiple style="display:none" onchange="handleTuopanUpdate(this)">
                     </div>
                     
-                    <div id="tuopan-update-progress" class="progress-container" style="display: none;">
-                        <div class="progress-item">
-                            <div class="progress-label">
-                                <span id="tuopan-update-label">准备中...</span>
-                                <span id="tuopan-update-percent">0%</span>
+                    <!-- 大文件进度条 -->
+                    <div id="tuopan-update-progress" class="progress-container">
+                        <div class="progress-header">
+                            <div class="progress-title">
+                                <span class="progress-spinner"></span>
+                                <span id="tuopan-update-title">正在处理...</span>
                             </div>
-                            <div class="progress-bar-container">
-                                <div class="progress-bar" id="tuopan-update-bar" style="width: 0%">0%</div>
-                            </div>
+                            <div class="progress-percentage" id="tuopan-update-percentage">0%</div>
+                        </div>
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar-fill" id="tuopan-update-bar" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-status" id="tuopan-update-status">准备中...</div>
+                        <div class="progress-details">
+                            <div><span>已处理:</span> <span id="tuopan-update-processed">0</span>/<span id="tuopan-update-total">0</span> 条</div>
+                            <div><span>耗时:</span> <span id="tuopan-update-time">0</span> 秒</div>
+                            <div><span>速度:</span> <span id="tuopan-update-speed">0</span> 条/秒</div>
                         </div>
                     </div>
                     
@@ -5221,66 +5229,102 @@
         async function handleTuopanUpdate(input) {
             const files = input.files;
             if (!files || files.length === 0) return;
-            
+
             const progress = document.getElementById('tuopan-update-progress');
             const result = document.getElementById('tuopan-update-result');
-            const label = document.getElementById('tuopan-update-label');
-            const percent = document.getElementById('tuopan-update-percent');
+            const title = document.getElementById('tuopan-update-title');
+            const percentage = document.getElementById('tuopan-update-percentage');
             const bar = document.getElementById('tuopan-update-bar');
-            
-            progress.style.display = 'block';
+            const status = document.getElementById('tuopan-update-status');
+            const processed = document.getElementById('tuopan-update-processed');
+            const total = document.getElementById('tuopan-update-total');
+            const timeSpan = document.getElementById('tuopan-update-time');
+            const speedSpan = document.getElementById('tuopan-update-speed');
+
+            progress.classList.add('show');
             result.innerHTML = '';
-            
+
             let totalNew = 0;
             let totalUpdated = 0;
-            
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                label.textContent = `处理文件 ${i + 1}/${files.length}: ${file.name}`;
-                
+            let totalRecords = 0;
+            const startTime = Date.now();
+
+            // 预先构建Map，提升查找效率（O(1)而不是O(n)）
+            status.textContent = '构建数据索引...';
+            const dataMap = new Map();
+            appData.tuopanData.forEach((item, index) => {
+                const key = `${item['船号']}|${item['分段']}|${item['托盘号']}`;
+                dataMap.set(key, index);
+            });
+
+            for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+                const file = files[fileIndex];
+                title.textContent = `处理文件 ${fileIndex + 1}/${files.length}: ${file.name}`;
+
                 try {
                     const reader = new FileReader();
-                    
                     await new Promise((resolve, reject) => {
                         reader.onload = async function(e) {
                             try {
+                                status.textContent = '解析Excel...';
                                 const data = new Uint8Array(e.target.result);
                                 const workbook = XLSX.read(data, { type: 'array' });
                                 const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                                const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-                                
-                                // 标准化数据
+                                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { raw: false, defval: null });
+
+                                status.textContent = '标准化数据...';
                                 const normalized = dataNormalizer.normalizeDataset(jsonData, 'tuopan');
-                                
-                                // 增量更新（基于船号+分段+托盘号去重）
+
+                                totalRecords += normalized.length;
+                                total.textContent = totalRecords;
+
+                                // 分批处理，避免UI卡死
+                                const batchSize = 500;
                                 let newCount = 0;
                                 let updateCount = 0;
-                                
-                                normalized.forEach(newItem => {
-                                    const key = `${newItem['船号']}|${newItem['分段']}|${newItem['托盘号']}`;
-                                    const existIndex = appData.tuopanData.findIndex(item => 
-                                        `${item['船号']}|${item['分段']}|${item['托盘号']}` === key
-                                    );
-                                    
-                                    if (existIndex >= 0) {
-                                        // 更新现有记录
-                                        appData.tuopanData[existIndex] = newItem;
-                                        updateCount++;
-                                    } else {
-                                        // 添加新记录
-                                        appData.tuopanData.push(newItem);
-                                        newCount++;
-                                    }
-                                });
-                                
+
+                                for (let i = 0; i < normalized.length; i += batchSize) {
+                                    const batch = normalized.slice(i, Math.min(i + batchSize, normalized.length));
+
+                                    batch.forEach(newItem => {
+                                        const key = `${newItem['船号']}|${newItem['分段']}|${newItem['托盘号']}`;
+
+                                        if (dataMap.has(key)) {
+                                            // 更新现有记录（使用Map查找，O(1)复杂度）
+                                            const index = dataMap.get(key);
+                                            appData.tuopanData[index] = newItem;
+                                            updateCount++;
+                                        } else {
+                                            // 添加新记录
+                                            const newIndex = appData.tuopanData.length;
+                                            appData.tuopanData.push(newItem);
+                                            dataMap.set(key, newIndex); // 同步更新Map
+                                            newCount++;
+                                        }
+                                    });
+
+                                    const currentProcessed = totalNew + totalUpdated + i + batch.length;
+                                    processed.textContent = currentProcessed;
+
+                                    const fileProgress = (i + batch.length) / normalized.length;
+                                    const overallProgress = ((fileIndex + fileProgress) / files.length) * 100;
+
+                                    percentage.textContent = Math.round(overallProgress) + '%';
+                                    bar.style.width = overallProgress + '%';
+
+                                    const elapsed = (Date.now() - startTime) / 1000;
+                                    timeSpan.textContent = Math.floor(elapsed);
+                                    const speed = Math.round(currentProcessed / elapsed);
+                                    speedSpan.textContent = speed;
+
+                                    status.textContent = `处理中... ${i + batch.length}/${normalized.length} 条`;
+
+                                    // 让出主线程，避免UI卡死
+                                    await new Promise(r => setTimeout(r, 0));
+                                }
+
                                 totalNew += newCount;
                                 totalUpdated += updateCount;
-                                
-                                const progress = Math.round(((i + 1) / files.length) * 100);
-                                percent.textContent = progress + '%';
-                                bar.style.width = progress + '%';
-                                bar.textContent = progress + '%';
-                                
                                 resolve();
                             } catch (error) {
                                 reject(error);
@@ -5289,35 +5333,29 @@
                         reader.onerror = reject;
                         reader.readAsArrayBuffer(file);
                     });
-                    
                 } catch (error) {
-                    console.error('文件处理失败:', error);
                     showToast(`文件 ${file.name} 处理失败`, 'error');
                 }
             }
-            
-            // 保存数据
+
+            status.textContent = '保存到硬盘...';
             await saveLocalData();
-            
-            // 显示结果
+
             result.innerHTML = `
                 <div style="background: #d4edda; padding: 15px; border-radius: 8px; border-left: 4px solid #28a745;">
-                    <h4 style="color: #155724; margin: 0 0 10px 0;">✅ 更新完成</h4>
+                    <h4 style="color: #155724; margin: 0 0 10px 0;">✅ 增量更新完成</h4>
+                    <p style="color: #155724; margin: 5px 0;">• 处理文件：<strong>${files.length}</strong> 个</p>
                     <p style="color: #155724; margin: 5px 0;">• 新增记录：<strong>${totalNew}</strong> 条</p>
                     <p style="color: #155724; margin: 5px 0;">• 更新记录：<strong>${totalUpdated}</strong> 条</p>
                     <p style="color: #155724; margin: 5px 0;">• 当前总数：<strong>${appData.tuopanData.length}</strong> 条</p>
+                    <p style="color: #155724; margin: 5px 0;">• 处理耗时：<strong>${Math.floor((Date.now() - startTime) / 1000)}</strong> 秒</p>
                 </div>
             `;
-            
+
             updateTuopanStats();
-            showToast('托盘明细更新成功', 'success');
-            
-            // 重置文件输入
+            showToast('托盘明细增量更新成功！', 'success');
             input.value = '';
-            
-            setTimeout(() => {
-                progress.style.display = 'none';
-            }, 2000);
+            setTimeout(() => progress.classList.remove('show'), 2000);
         }
         
         // 更新托盘统计信息
