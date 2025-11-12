@@ -4134,10 +4134,31 @@
         
         function populateShipSelect() {
             const select = document.getElementById('select-ship');
-            const ships = [...new Set(appData.shipStatusData.map(item => item['船号'] || item['工程号']).filter(Boolean))];
-            
-            select.innerHTML = '<option value="">-- 请选择船号 --</option>' + 
-                ships.map(ship => `<option value="${ship}">${ship}</option>`).join('');
+
+            console.log('populateShipSelect 被调用');
+            console.log('shipStatusData 条数:', appData.shipStatusData.length);
+
+            if (appData.shipStatusData.length > 0) {
+                console.log('第一条数据示例:', appData.shipStatusData[0]);
+            }
+
+            // 提取所有船号（支持标准化和未标准化的数据）
+            const ships = [...new Set(appData.shipStatusData.map(item => {
+                // 尝试多种可能的字段名
+                return item['船号'] || item['工程号'] || item['项目编号'] ||
+                       item['船舶编号'] || item['工程编号'] || item['编号'];
+            }).filter(Boolean))];
+
+            console.log('提取到的船号列表:', ships);
+
+            if (ships.length === 0) {
+                select.innerHTML = '<option value="">-- 暂无船号数据 --</option>';
+                showToast('未能识别船号字段，请检查Excel列名', 'warning');
+            } else {
+                select.innerHTML = '<option value="">-- 请选择船号 --</option>' +
+                    ships.map(ship => `<option value="${ship}">${ship}</option>`).join('');
+                showToast(`已识别 ${ships.length} 个船号`, 'success');
+            }
         }
         
         function showShipStatus() {
@@ -4146,17 +4167,22 @@
                 document.getElementById('ship-status-display').innerHTML = '';
                 return;
             }
-            
-            const shipData = appData.shipStatusData.filter(item => 
-                (item['船号'] || item['工程号']) === shipNo
-            );
-            
+
+            // 筛选该船号的所有数据（支持多种字段名）
+            const shipData = appData.shipStatusData.filter(item => {
+                const itemShipNo = item['船号'] || item['工程号'] || item['项目编号'] ||
+                                   item['船舶编号'] || item['工程编号'] || item['编号'];
+                return itemShipNo === shipNo;
+            });
+
+            console.log(`筛选船号 ${shipNo}，找到 ${shipData.length} 条数据`);
+
             if (shipData.length === 0) {
-                document.getElementById('ship-status-display').innerHTML = 
+                document.getElementById('ship-status-display').innerHTML =
                     '<div class="empty-state"><div class="empty-text">该船暂无状态数据</div></div>';
                 return;
             }
-            
+
             const html = `
                 <div class="table-container" style="margin-top: 20px;">
                     <table>
@@ -4175,7 +4201,7 @@
                     </table>
                 </div>
             `;
-            
+
             document.getElementById('ship-status-display').innerHTML = html;
         }
         
@@ -4245,17 +4271,22 @@
         
         async function loadLocalData() {
             if (!dbManager) return;
-            
+
             try {
                 appData.tuopanData = await dbManager.load('tuopan') || [];
                 appData.xianhouData = await dbManager.load('xianhou') || [];
                 appData.planData = await dbManager.load('plan') || [];
                 appData.factoryData = await dbManager.load('factory') || [];
                 appData.shipStatusData = await dbManager.load('shipstatus') || [];
-                
+
                 const timestamp = await dbManager.load('timestamp');
                 if (timestamp) {
                     console.log('数据最后更新时间:', timestamp);
+                }
+
+                // 如果有船舶状态数据，填充下拉框
+                if (appData.shipStatusData.length > 0) {
+                    populateShipSelect();
                 }
             } catch (error) {
                 console.error('数据加载失败:', error);
