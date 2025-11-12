@@ -1718,7 +1718,7 @@
                 '入库数量': ['入库数量', '到货数量', '实际数量'],
                 '来源': ['来源', '数据来源', '类型']
             },
-            
+
             // 先后行计划字段映射
             xianhou: {
                 '船号': ['船号', '工程号', '项目编号'],
@@ -1728,6 +1728,17 @@
                 '集配日期': ['集配计划', '集配日期', '计划日期', '集配时间'],
                 '舾装单位': ['舾装单位', '单位', '责任单位', '负责单位'],
                 '先后行': ['先后行', '先/后行', '顺序', '优先级']
+            },
+
+            // 船舶状态字段映射
+            shipstatus: {
+                '船号': ['船号', '工程号', '项目编号', '船舶编号', '工程编号', '编号'],
+                '分段': ['分段', '分段号', '段号', '区域'],
+                '状态': ['状态', '建造状态', '进度', '当前状态'],
+                '计划日期': ['计划日期', '计划时间', '预计日期', '目标日期'],
+                '实际日期': ['实际日期', '实际时间', '完成日期', '完成时间'],
+                '负责人': ['负责人', '责任人', '项目经理', '负责单位'],
+                '备注': ['备注', '说明', '注释', '备注信息']
             }
         };
         
@@ -1743,31 +1754,39 @@
             normalizeRecord(record, type) {
                 const normalized = {};
                 const schema = this.schema[type];
-                
+
                 if (!schema) {
                     console.error(`未知的数据类型: ${type}`);
                     return record;
                 }
-                
+
+                // 记录已使用的原始字段
+                const usedFields = new Set();
+
                 // 遍历标准字段
                 for (const [standardField, possibleFields] of Object.entries(schema)) {
                     let value = null;
-                    
+
                     // 尝试从可能的字段名中找到值
                     for (const field of possibleFields) {
                         if (record.hasOwnProperty(field) && record[field] != null && record[field] !== '') {
                             value = record[field];
+                            usedFields.add(field);
                             break;
                         }
                     }
-                    
+
                     // 数据清洗和类型转换
                     normalized[standardField] = this.cleanValue(value, standardField);
                 }
-                
-                // 保留原始数据引用（调试用）
-                normalized._raw = record;
-                
+
+                // 保留未被映射的原始字段（用于显示额外信息）
+                for (const [key, value] of Object.entries(record)) {
+                    if (!usedFields.has(key) && key !== '_raw' && !key.startsWith('__EMPTY')) {
+                        normalized[key] = value;
+                    }
+                }
+
                 return normalized;
             }
             
@@ -2020,7 +2039,7 @@
             
             // 第一步：数据标准化
             let normalizedData = [];
-            if (type === 'tuopan' || type === 'xianhou') {
+            if (type === 'tuopan' || type === 'xianhou' || type === 'shipstatus') {
                 progressBar.update(70, 100, '标准化数据格式...');
                 normalizedData = dataNormalizer.normalizeDataset(jsonData, type);
                 progressBar.update(75, 100, '数据标准化完成');
