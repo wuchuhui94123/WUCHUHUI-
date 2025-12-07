@@ -1,0 +1,67 @@
+# 抖音自动化脚本配置文件
+
+# ADB 配置
+adb:
+  device_id: "127.0.0.1:5555"  # 模拟器默认端口，根据实际情况修改
+  # 常见模拟器端口：
+  # 夜神模拟器: 127.0.0.1:62001
+  # 雷电模拟器: 127.0.0.1:5555
+  # MuMu模拟器: 127.0.0.1:7555
+  # 逍遥模拟器: 127.0.0.1:21503
+
+# 抖音包名
+douyin:
+  package_name: "com.ss.android.ugc.aweme"
+
+# 刷视频配置
+video:
+  enabled: true
+  duration: 300  # 总运行时长（秒）
+  watch_time_min: 10  # 每个视频最少观看时间（秒）
+  watch_time_max: 30  # 每个视频最多观看时间（秒）
+  like_probability: 0.3  # 点赞概率 (0-1)
+  comment_probability: 0.1  # 评论概率 (0-1)
+  share_probability: 0.05  # 分享概率 (0-1)
+
+# 直播配置
+live:
+  enabled: true
+  duration: 600  # 总直播观看时长（秒）
+  watch_time_min: 60  # 每个直播间最少观看时间（秒）
+  watch_time_max: 300  # 每个直播间最多观看时间（秒）
+  like_probability: 0.5  # 点赞概率
+  comment_probability: 0.3  # 评论概率
+  gift_probability: 0.0  # 送礼物概率（谨慎使用）
+
+# 评论内容池
+comments:
+  - "主播厉害👍"
+  - "学到了"
+  - "太精彩了"
+  - "支持一下"
+  - "666"
+  - "哈哈哈"
+  - "真有意思"
+  - "不错不错"
+  - "继续加油"
+  - "好看"
+
+# 随机化配置（防检测）
+randomization:
+  swipe_duration_min: 300  # 滑动最短时间（毫秒）
+  swipe_duration_max: 800  # 滑动最长时间（毫秒）
+  action_interval_min: 1  # 操作间隔最小值（秒）
+  action_interval_max: 5  # 操作间隔最大值（秒）
+  human_like_delay: true  # 启用类人延迟
+
+# 安全配置
+safety:
+  max_continuous_actions: 50  # 最大连续操作次数
+  rest_interval: 300  # 休息间隔（秒）
+  rest_duration: 60  # 休息时长（秒）
+
+# 日志配置
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  save_to_file: true
+  log_dir: "logs"
