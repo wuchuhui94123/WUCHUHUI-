@@ -1,0 +1,48 @@
+{
+  "adb_path": "adb",
+  "device_name": "127.0.0.1:5555",
+  "douyin_package": "com.ss.android.ugc.aweme",
+
+  "video_settings": {
+    "watch_duration_min": 15,
+    "watch_duration_max": 45,
+    "swipe_count": 50,
+    "like_probability": 0.3,
+    "comment_probability": 0.1,
+    "follow_probability": 0.05
+  },
+
+  "live_settings": {
+    "watch_duration_min": 180,
+    "watch_duration_max": 600,
+    "like_interval_min": 30,
+    "like_interval_max": 90,
+    "comment_interval_min": 120,
+    "comment_interval_max": 300,
+    "max_live_count": 5
+  },
+
+  "comments": [
+    "主播好棒！",
+    "666",
+    "学到了",
+    "支持主播",
+    "太有意思了",
+    "关注了",
+    "加油",
+    "真不错",
+    "厉害",
+    "赞一个"
+  ],
+
+  "screen_resolution": {
+    "width": 1080,
+    "height": 2340
+  },
+
+  "delay": {
+    "short": 1,
+    "medium": 3,
+    "long": 5
+  }
+}
