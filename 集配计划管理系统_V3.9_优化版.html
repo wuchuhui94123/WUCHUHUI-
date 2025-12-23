@@ -5,15 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>集配计划管理系统 v3.0 优化版</title>
     
-    <!-- 引入外部库 - 在线CDN版本 -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <!-- 引入外部库 - 本地离线版本 -->
+    <script src="xlsx.full.min.js"></script>
+    <script src="chart.min.js"></script>
 
-    <!-- 如需离线使用，请：
-         1. 下载 xlsx.full.min.js 和 chart.min.js 到HTML同目录
-         2. 将上面两行改为：
-            <script src="xlsx.full.min.js"></script>
-            <script src="chart.min.js"></script>
+    <!--
+    ⚠️ 重要提示：本系统使用本地JS库，需要下载以下文件到HTML同目录：
+
+    方法1（Windows）：双击运行 "下载JS库.bat"
+    方法2（Linux/Mac）：运行 bash 下载JS库.sh
+    方法3（手动下载）：
+        - xlsx.full.min.js (1.5MB)
+          https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js
+        - chart.min.js (200KB)
+          https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js
+
+    下载后文件结构：
+    📁 您的文件夹/
+       ├─ 集配计划管理系统_V3.9_优化版.html
+       ├─ xlsx.full.min.js
+       └─ chart.min.js
     -->
     
     <style>
