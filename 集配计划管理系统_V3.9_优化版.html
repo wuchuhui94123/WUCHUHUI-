@@ -5,9 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>集配计划管理系统 v3.0 优化版</title>
     
-    <!-- 引入外部库 - 本地离线版本 -->
-    <script src="xlsx.full.min.js"></script>
-    <script src="chart.min.js"></script>
+    <!-- 引入外部库 - 在线CDN版本 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+
+    <!-- 如需离线使用，请：
+         1. 下载 xlsx.full.min.js 和 chart.min.js 到HTML同目录
+         2. 将上面两行改为：
+            <script src="xlsx.full.min.js"></script>
+            <script src="chart.min.js"></script>
+    -->
     
     <style>
         * {
