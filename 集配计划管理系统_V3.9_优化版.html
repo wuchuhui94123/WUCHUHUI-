@@ -2915,15 +2915,15 @@
                 '托盘号': palletNo,
                 '考核月': xianhou['考核月'],
                 '周次': calculateWeek(xianhou['考核月'], tuopanData['纳期计划']),
-                '集配日期': xianhou['集配日期'],
+                '集配日期': formatDate(xianhou['集配日期']),
                 '舾装单位': xianhou['舾装单位'],
                 '先后行': xianhou['先后行'],
                 '仓库': convertWarehouse(tuopanData['制作专业']),
-                '制作纳期': tuopanData['纳期计划'],
+                '制作纳期': formatDate(tuopanData['纳期计划']),
                 '单号': tuopanData['分交单号'],
                 '厂区': tuopanData['外协厂'],
                 '计划类型': tuopanData['图纸类型'] === '托盘表' ? '托盘计划' : '非托计划',
-                '分交日期': tuopanData['分交时间'],
+                '分交日期': formatDate(tuopanData['分交时间']),
                 '托盘重量': tuopanData['托盘重量'],
                 '到货重量': tuopanData['到货重量'],
                 '托盘数量': tuopanData['托盘数量'],
@@ -3301,17 +3301,93 @@
             }
         }
         
+        // ==================== 日期格式化 ====================
+        function formatDate(dateValue) {
+            if (!dateValue) return '';
+
+            // 如果已经是标准格式（YYYY-MM-DD），直接返回
+            if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+                return dateValue;
+            }
+
+            // 尝试解析各种日期格式
+            let date = null;
+
+            if (typeof dateValue === 'string') {
+                // 移除多余的空格
+                dateValue = dateValue.trim();
+
+                // 常见格式：2024-01-01, 2024/01/01, 2024.01.01, 20240101
+                const formats = [
+                    /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/,  // 2024-01-01, 2024/01/01, 2024.01.01
+                    /^(\d{4})(\d{2})(\d{2})$/,                   // 20240101
+                    /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/    // 01-01-2024, 01/01/2024
+                ];
+
+                for (const format of formats) {
+                    const match = dateValue.match(format);
+                    if (match) {
+                        let year, month, day;
+                        if (format === formats[2]) {
+                            // DD-MM-YYYY 或 MM-DD-YYYY 格式
+                            // 假设是 MM-DD-YYYY（美国格式）
+                            month = match[1];
+                            day = match[2];
+                            year = match[3];
+                        } else {
+                            year = match[1];
+                            month = match[2];
+                            day = match[3];
+                        }
+
+                        // 补齐月份和日期为两位数
+                        month = month.padStart(2, '0');
+                        day = day.padStart(2, '0');
+
+                        return `${year}-${month}-${day}`;
+                    }
+                }
+
+                // 尝试直接解析
+                date = new Date(dateValue);
+                if (!isNaN(date.getTime())) {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
+            } else if (typeof dateValue === 'number') {
+                // Excel日期序列号（从1900-01-01开始的天数）
+                const excelEpoch = new Date(1900, 0, 1);
+                date = new Date(excelEpoch.getTime() + (dateValue - 2) * 86400000);
+                if (!isNaN(date.getTime())) {
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
+            } else if (dateValue instanceof Date) {
+                const year = dateValue.getFullYear();
+                const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+                const day = String(dateValue.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+
+            // 如果无法解析，返回原值
+            return dateValue;
+        }
+
         // ==================== 仓库转换 ====================
         function convertWarehouse(specialty) {
             if (!specialty) return '';
-            
+
             const conversions = {
                 '铁舾': 'F',
                 '电舾': 'E',
                 '管舾': 'D',
-                '风管': 'F'
+                '风管': 'V'
             };
-            
+
             return conversions[specialty] || specialty;
         }
         
