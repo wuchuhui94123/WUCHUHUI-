@@ -2536,19 +2536,64 @@
             }
         }
         
+        // ==================== 字段值标准化（用于匹配）====================
+        function normalizeForMatch(value) {
+            if (value == null || value === '') return '';
+
+            // 转为字符串
+            let str = String(value);
+
+            // 去除所有空格、制表符、换行符
+            str = str.replace(/[\s\t\n\r]/g, '');
+
+            // 转为大写（统一大小写）
+            str = str.toUpperCase();
+
+            return str;
+        }
+
         // ==================== 建立托盘索引（快速查找）====================
         function buildTuopanIndex(tuopanData) {
             const index = new Map();
-            
-            console.log('开始建立托盘索引...');
-            
-            tuopanData.forEach(item => {
-                const shipNo = item['船号'];
-                const blockNo = item['分段'];
-                const palletNo = item['托盘号'];
-                
-                if (!shipNo || !blockNo) return;
-                
+
+            console.log('=== 开始建立托盘索引 ===');
+            console.log('托盘数据总数:', tuopanData.length);
+
+            // 统计字段值情况
+            const fieldStats = {
+                hasShipNo: 0,
+                hasBlockNo: 0,
+                hasPalletNo: 0,
+                emptyShipNo: 0,
+                emptyBlockNo: 0
+            };
+
+            tuopanData.forEach((item, idx) => {
+                const shipNo = normalizeForMatch(item['船号']);
+                const blockNo = normalizeForMatch(item['分段']);
+                const palletNo = normalizeForMatch(item['托盘号']);
+
+                // 统计
+                if (shipNo) fieldStats.hasShipNo++;
+                else fieldStats.emptyShipNo++;
+
+                if (blockNo) fieldStats.hasBlockNo++;
+                else fieldStats.emptyBlockNo++;
+
+                if (palletNo) fieldStats.hasPalletNo++;
+
+                if (!shipNo || !blockNo) {
+                    if (idx < 5) {
+                        console.warn(`托盘数据#${idx} 缺少船号或分段:`, {
+                            原始船号: item['船号'],
+                            原始分段: item['分段'],
+                            标准化船号: shipNo,
+                            标准化分段: blockNo
+                        });
+                    }
+                    return;
+                }
+
                 // 索引1: 船号+分段+托盘（精确匹配用）
                 if (palletNo) {
                     const key1 = `${shipNo}|${blockNo}|${palletNo}`;
@@ -2557,7 +2602,7 @@
                     }
                     index.get(key1).push(item);
                 }
-                
+
                 // 索引2: 船号+分段（降级匹配用）
                 const key2 = `${shipNo}|${blockNo}`;
                 if (!index.has(key2)) {
@@ -2565,8 +2610,20 @@
                 }
                 index.get(key2).push(item);
             });
-            
-            console.log(`索引建立完成: ${index.size}个键`);
+
+            console.log('索引建立完成:', {
+                索引键数量: index.size,
+                有船号: fieldStats.hasShipNo,
+                有分段: fieldStats.hasBlockNo,
+                有托盘号: fieldStats.hasPalletNo,
+                空船号: fieldStats.emptyShipNo,
+                空分段: fieldStats.emptyBlockNo
+            });
+
+            // 显示前5个索引键示例
+            const sampleKeys = Array.from(index.keys()).slice(0, 5);
+            console.log('索引键示例:', sampleKeys);
+
             return index;
         }
         
@@ -2587,40 +2644,71 @@
             // ⭐ 全局去重：记录所有已生成的托盘（船号+分段+托盘号）
             const generatedPallets = new Set();
             
-            console.log('开始匹配，遍历先后行计划...');
-            
+            console.log('=== 开始匹配先后行与托盘数据 ===');
+            console.log('先后行数据总数:', xianhouData.length);
+
+            // 显示前3条先后行数据示例
+            for (let i = 0; i < Math.min(3, xianhouData.length); i++) {
+                const xh = xianhouData[i];
+                console.log(`先后行示例#${i + 1}:`, {
+                    原始船号: xh['船号'],
+                    原始分段: xh['分段'],
+                    原始托盘号: xh['托盘号'],
+                    标准化船号: normalizeForMatch(xh['船号']),
+                    标准化分段: normalizeForMatch(xh['分段']),
+                    标准化托盘号: normalizeForMatch(xh['托盘号'])
+                });
+            }
+
             for (let i = 0; i < xianhouData.length; i++) {
                 const xh = xianhouData[i];
-                const shipNo = xh['船号'];
-                const blockNo = xh['分段'];
-                const palletNo = xh['托盘号'];
+
+                // ⭐ 标准化后的字段值（用于匹配）
+                const shipNo = normalizeForMatch(xh['船号']);
+                const blockNo = normalizeForMatch(xh['分段']);
+                const palletNo = normalizeForMatch(xh['托盘号']);
+
+                // 原始值（用于显示和记录）
+                const shipNoRaw = xh['船号'];
+                const blockNoRaw = xh['分段'];
+                const palletNoRaw = xh['托盘号'];
+
                 const kaoheMonth = xh['考核月'];
                 const jiPeiDate = xh['集配日期'];
                 const yizhuangUnit = xh['舾装单位'];
                 const xianhouXing = xh['先后行'];
-                
+
                 let matched = false;
-                
+
                 // 策略1: 精确匹配（船号+分段+托盘）
                 if (palletNo) {
                     const key1 = `${shipNo}|${blockNo}|${palletNo}`;
-                    
+
                     // ⭐ 检查是否已生成过（避免重复）
                     if (!generatedPallets.has(key1)) {
                         const matches = tuopanIndex.get(key1);
                         if (matches && matches.length > 0) {
                             // 汇总该托盘的数据
                             const tuopanData = aggregateTuopan(matches);
-                            result.push(createPlanRecord(xh, tuopanData, palletNo, '精确匹配'));
+                            result.push(createPlanRecord(xh, tuopanData, palletNoRaw, '精确匹配'));
                             exactMatchCount++;
                             matched = true;
-                            
+
                             // ⭐ 记录已生成
                             generatedPallets.add(key1);
-                            
+
                             if (i < 10) {
-                                console.log(`#${i + 1} ${shipNo}-${blockNo}-${palletNo} → 精确匹配`, {
+                                console.log(`#${i + 1} [精确匹配] ${shipNoRaw}-${blockNoRaw}-${palletNoRaw}`, {
+                                    匹配键: key1,
                                     托盘重量: tuopanData['托盘重量']
+                                });
+                            }
+                        } else {
+                            // 未匹配：记录详细信息
+                            if (i < 10) {
+                                console.warn(`#${i + 1} [精确匹配失败] ${shipNoRaw}-${blockNoRaw}-${palletNoRaw}`, {
+                                    尝试匹配键: key1,
+                                    索引中是否存在: tuopanIndex.has(key1)
                                 });
                             }
                         }
@@ -2628,24 +2716,24 @@
                         // 该托盘已经生成过了，跳过
                         matched = true;
                         if (i < 10) {
-                            console.log(`#${i + 1} ${shipNo}-${blockNo}-${palletNo} → 跳过（已生成）`);
+                            console.log(`#${i + 1} [跳过重复] ${shipNoRaw}-${blockNoRaw}-${palletNoRaw}`);
                         }
                     }
                 }
-                
+
                 // 策略2: 分段匹配（船号+分段，展开为多条记录）
                 if (!matched) {
                     const key2 = `${shipNo}|${blockNo}`;
                     const allMatches = tuopanIndex.get(key2);
-                    
+
                     if (allMatches && allMatches.length > 0) {
                         // 按托盘号分组
                         const palletGroups = new Map();
                         allMatches.forEach(item => {
-                            const pNo = item['托盘号'];
+                            const pNo = normalizeForMatch(item['托盘号']);
                             if (pNo) {
                                 const palletKey = `${shipNo}|${blockNo}|${pNo}`;
-                                
+
                                 // ⭐ 全局去重：排除已经生成过的托盘
                                 if (!generatedPallets.has(palletKey)) {
                                     if (!palletGroups.has(pNo)) {
@@ -2655,24 +2743,41 @@
                                 }
                             }
                         });
-                        
+
                         // 为每个托盘生成一条记录
                         if (palletGroups.size > 0) {
                             palletGroups.forEach((items, pNo) => {
                                 const tuopanData = aggregateTuopan(items);
-                                result.push(createPlanRecord(xh, tuopanData, pNo, '分段展开'));
+                                result.push(createPlanRecord(xh, tuopanData, items[0]['托盘号'], '分段展开'));
                                 blockExpandCount++;
-                                
+
                                 // ⭐ 记录已生成
                                 const palletKey = `${shipNo}|${blockNo}|${pNo}`;
                                 generatedPallets.add(palletKey);
                             });
-                            
+
                             matched = true;
-                            
+
                             if (i < 10) {
-                                console.log(`#${i + 1} ${shipNo}-${blockNo} → 分段展开为 ${palletGroups.size} 条托盘`);
+                                console.log(`#${i + 1} [分段展开] ${shipNoRaw}-${blockNoRaw} → ${palletGroups.size} 条托盘`, {
+                                    匹配键: key2
+                                });
                             }
+                        } else {
+                            if (i < 10) {
+                                console.warn(`#${i + 1} [分段匹配但无可用托盘] ${shipNoRaw}-${blockNoRaw}`, {
+                                    匹配键: key2,
+                                    索引匹配数: allMatches.length,
+                                    原因: '所有托盘已被其他先后行使用'
+                                });
+                            }
+                        }
+                    } else {
+                        if (i < 10) {
+                            console.warn(`#${i + 1} [分段匹配失败] ${shipNoRaw}-${blockNoRaw}`, {
+                                尝试匹配键: key2,
+                                索引中是否存在: tuopanIndex.has(key2)
+                            });
                         }
                     }
                 }
@@ -2691,25 +2796,32 @@
                         '分交时间': '',
                         '制作专业': ''
                     };
-                    result.push(createPlanRecord(xh, emptyData, palletNo || '', '无托盘数据'));
+                    result.push(createPlanRecord(xh, emptyData, palletNoRaw || '', '无托盘数据'));
                     noMatchCount++;
                     xianhouNoMatchCount++;  // ⭐ 先后行未匹配
-                    
+
                     // ⭐ 记录未匹配的先后行明细
                     unmatchedXianhou.push({
                         '序号': i + 1,
-                        '船号': shipNo,
-                        '分段': blockNo,
-                        '托盘号': palletNo || '',
+                        '船号': shipNoRaw,
+                        '分段': blockNoRaw,
+                        '托盘号': palletNoRaw || '',
                         '考核月': kaoheMonth,
                         '集配日期': jiPeiDate,
                         '舾装单位': yizhuangUnit,
                         '先后行': xianhouXing,
+                        '标准化船号': shipNo,
+                        '标准化分段': blockNo,
+                        '标准化托盘号': palletNo,
                         '未匹配原因': palletNo ? '托盘明细中无此托盘' : '托盘明细中无此分段'
                     });
-                    
+
                     if (i < 10) {
-                        console.log(`#${i + 1} ${shipNo}-${blockNo}-${palletNo || '无'} → 无托盘数据`);
+                        console.warn(`#${i + 1} [无匹配] ${shipNoRaw}-${blockNoRaw}-${palletNoRaw || '无'}`, {
+                            原始值: { 船号: shipNoRaw, 分段: blockNoRaw, 托盘号: palletNoRaw },
+                            标准化值: { 船号: shipNo, 分段: blockNo, 托盘号: palletNo },
+                            原因: palletNo ? '托盘明细中无此托盘' : '托盘明细中无此分段'
+                        });
                     }
                 } else {
                     xianhouMatchedCount++;  // ⭐ 先后行匹配成功
@@ -2742,11 +2854,11 @@
                 unmatchedXianhou: unmatchedXianhou  // ⭐ 保存未匹配明细
             };
             
+            console.log('');
             console.log('=== 匹配完成 ===');
             console.log('先后行计划:', xianhouData.length, '条');
-            console.log('  └ 匹配成功:', xianhouMatchedCount, '条');
+            console.log('  └ 匹配成功:', xianhouMatchedCount, '条 (' + matchRate + '%)');
             console.log('  └ 未匹配:', xianhouNoMatchCount, '条');
-            console.log('  └ 匹配成功率:', matchRate + '%');
             console.log('');
             console.log('生成记录明细:');
             console.log('  └ 精确匹配:', exactMatchCount, '条');
@@ -2754,7 +2866,44 @@
             console.log('  └ 无托盘数据:', noMatchCount, '条');
             console.log('  └ 总计生成:', result.length, '条');
             console.log('  └ 唯一托盘:', generatedPallets.size, '个');
-            
+
+            // ⭐ 输出未匹配项的详细诊断信息
+            if (unmatchedXianhou.length > 0) {
+                console.log('');
+                console.warn('=== 未匹配项诊断报告 ===');
+                console.warn(`共 ${unmatchedXianhou.length} 条先后行未匹配到托盘数据`);
+                console.warn('');
+                console.warn('前10条未匹配项详情：');
+
+                const sampleUnmatched = unmatchedXianhou.slice(0, 10);
+                sampleUnmatched.forEach((item, idx) => {
+                    console.warn(`#${idx + 1}:`, {
+                        序号: item['序号'],
+                        船号: item['船号'],
+                        分段: item['分段'],
+                        托盘号: item['托盘号'] || '(空)',
+                        标准化船号: item['标准化船号'],
+                        标准化分段: item['标准化分段'],
+                        标准化托盘号: item['标准化托盘号'] || '(空)',
+                        原因: item['未匹配原因']
+                    });
+                });
+
+                console.warn('');
+                console.warn('💡 诊断建议：');
+                console.warn('1. 检查托盘明细Excel是否包含上述船号、分段、托盘号');
+                console.warn('2. 注意字段值的空格、大小写会被自动标准化');
+                console.warn('3. 打开浏览器控制台查看详细的标准化前后对比');
+                console.warn('4. 可以导出 window.matchStats.unmatchedXianhou 查看完整未匹配列表');
+                console.warn('');
+                console.warn('📋 控制台命令：');
+                console.warn('  • console.table(window.matchStats.unmatchedXianhou) - 查看所有未匹配项');
+                console.warn('  • console.table(appData.tuopanData.slice(0,10)) - 查看托盘数据示例');
+            } else {
+                console.log('');
+                console.log('✅ 所有先后行均已匹配到托盘数据！');
+            }
+
             return result;
         }
         
